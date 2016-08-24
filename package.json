@@ -1,0 +1,29 @@
+{
+    "author": "Karambola",
+    "dependencies": {},
+    "keywords": [],
+    "name": "accelerometer",
+    "pebble": {
+        "capabilities": [
+            ""
+        ],
+        "displayName": "Accelerometer",
+        "enableMultiJS": true,
+        "messageKeys": [],
+        "projectType": "native",
+        "resources": {
+            "media": []
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "aplite",
+            "basalt",
+            "chalk"
+        ],
+        "uuid": "16f2de14-1b53-4431-a5bd-e6b52e3ca631",
+        "watchapp": {
+            "watchface": false
+        }
+    },
+    "version": "1.64.0"
+}
