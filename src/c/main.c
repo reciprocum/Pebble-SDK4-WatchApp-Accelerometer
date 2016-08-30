@@ -1,14 +1,29 @@
-/* (C) Afonso Santos, November 2014, Portugal */
+/*
+   Project: Accelerometer (watchapp)
+   File   : main.c
+   Author : Afonso Santos, Portugal
+
+   Last revision: 12h31 August 28 2016
+*/
 
 #include <pebble.h>
-#include "Sampler.h"
+#include <karambola/Sampler.h>
 
+#include "Config.h"
+
+
+// Obstruction related.
+GSize unobstructed_plotter ;
 
 // UI related
-static Window         *window ;
-static TextLayer      *label_layer ;
-static Layer          *plotter_layer ;
-static ActionBarLayer *action_bar ;
+static Window         *s_window ;
+static Layer          *s_window_layer ;
+
+static TextLayer      *s_label_text_layer ;
+static Layer          *s_label_layer ;
+
+static Layer          *s_plotter_layer ;
+static ActionBarLayer *s_action_bar_layer ;
 
 
 // World related
@@ -16,23 +31,26 @@ static ActionBarLayer *action_bar ;
 #define SAMPLES_SHOW_MAX          145
 #define SAMPLES_SHOW_MIN          10
 
-#define MODE_PLOTTER_UNDEFINED     0
-#define MODE_PLOTTER_X             1
-#define MODE_PLOTTER_Y             2
-#define MODE_PLOTTER_Z             3
+typedef enum { PLOTTER_MODE_UNDEFINED
+             , PLOTTER_MODE_X
+             , PLOTTER_MODE_Y
+             , PLOTTER_MODE_Z
+             }
+PlotterMode ;
 
-#define DEFAULT_PLOTTER_MODE       MODE_PLOTTER_Y
+
+#define PLOTTER_DEFAULT_MODE       PLOTTER_MODE_Y
 
 
-AccelSamplingRate sampler_samplingRate      = ACCEL_SAMPLING_25HZ ;
-uint8_t           sampler_samplesPerUpdate  = 1 ;
-Sampler          *sampler_beingPlotted      = NULL ;
-Sampler          *sampler_accelX            = NULL ;                        // To be allocated at world_init( ).
-Sampler          *sampler_accelY            = NULL ;                        // To be allocated at world_init( ).
-Sampler          *sampler_accelZ            = NULL ;                        // To be allocated at world_init( ).
-static uint8_t    plotter_mode   	          = MODE_PLOTTER_UNDEFINED ;
-static bool       config_mode_isOn          = false ;
-static uint16_t   plotter_lag               = 0 ;
+AccelSamplingRate  sampler_samplingRate      = ACCEL_SAMPLING_25HZ ;
+uint8_t            sampler_samplesPerUpdate  = 1 ;
+Sampler           *sampler_beingPlotted      = NULL ;
+Sampler           *sampler_accelX            = NULL ;                        // To be allocated at world_init( ).
+Sampler           *sampler_accelY            = NULL ;                        // To be allocated at world_init( ).
+Sampler           *sampler_accelZ            = NULL ;                        // To be allocated at world_init( ).
+static PlotterMode s_plotter_mode   	       = PLOTTER_MODE_UNDEFINED ;
+static bool        s_config_mode_isOn        = false ;
+static uint16_t    s_plotter_lag             = 0 ;
 
 char    *label_name ;
 char    *label_rate = "25" ;
@@ -50,41 +68,46 @@ label_update( )
           , sizeof(label_text)
           , "%s%-2s min:%-+5d max:%-+5d"
           , label_name
-          , config_mode_isOn ? (++label_update_counter & 0b100 ? label_rate : "+-" ) : label_rate
+          , s_config_mode_isOn ? (++label_update_counter & 0b100 ? label_rate : "+-" ) : label_rate
           , label_min
           , label_max
           ) ;
 
-  text_layer_set_text( label_layer, label_text ) ;
+  text_layer_set_text( s_label_text_layer, label_text ) ;
 }
 
 
 void
 plotterMode_set
-( uint8_t plotterMode )
+( PlotterMode plotterMode )
 {
-  if (plotter_mode == plotterMode)
+  if (s_plotter_mode == plotterMode)
     return ;
 
-  switch (plotter_mode = plotterMode)
+  switch (s_plotter_mode = plotterMode)
   {
-    case MODE_PLOTTER_X:
+    case PLOTTER_MODE_X:
       sampler_beingPlotted = sampler_accelX ;
       label_name = "X" ;
       break ;
 
-    case MODE_PLOTTER_Y:
+    case PLOTTER_MODE_Y:
       sampler_beingPlotted = sampler_accelY ;
       label_name = "Y" ;
       break ;
 
-    case MODE_PLOTTER_Z:
+    case PLOTTER_MODE_Z:
       sampler_beingPlotted = sampler_accelZ ;
       label_name = "Z" ;
       break ;
+
+    default:
+      sampler_beingPlotted = NULL ;
+      label_name = "?" ;
+      break ;
   }
 
-  layer_mark_dirty( plotter_layer ) ;
+  layer_mark_dirty( s_plotter_layer ) ;
 }
 
 
@@ -98,18 +121,22 @@ void
 plotterMode_change_click_handler
 ( ClickRecognizerRef recognizer, void *context )
 {
-  switch (plotter_mode)
+  switch (s_plotter_mode)
   {
-    case MODE_PLOTTER_X:
-      plotterMode_set( MODE_PLOTTER_Y ) ;
+    case PLOTTER_MODE_X:
+      plotterMode_set( PLOTTER_MODE_Y ) ;
       break ;
 
-    case MODE_PLOTTER_Y:
-      plotterMode_set( MODE_PLOTTER_Z ) ;
+    case PLOTTER_MODE_Y:
+      plotterMode_set( PLOTTER_MODE_Z ) ;
       break ;
 
-    case MODE_PLOTTER_Z:
-      plotterMode_set( MODE_PLOTTER_X ) ;
+    case PLOTTER_MODE_Z:
+      plotterMode_set( PLOTTER_MODE_X ) ;
+      break ;
+
+    default:
+      plotterMode_set( PLOTTER_MODE_UNDEFINED ) ;
       break ;
   }
 }
@@ -119,10 +146,10 @@ void
 plotter_stepLeft_click_handler
 ( ClickRecognizerRef recognizer, void *context )
 {
-  if (plotter_lag < sampler_beingPlotted->samplesNum - SAMPLES_SHOW_MIN )
+  if (s_plotter_lag < sampler_beingPlotted->samplesNum - SAMPLES_SHOW_MIN )
   {
-    ++plotter_lag ;
-    layer_mark_dirty( plotter_layer ) ;
+    ++s_plotter_lag ;
+    layer_mark_dirty( s_plotter_layer ) ;
   }
 }
 
@@ -131,10 +158,10 @@ void
 plotter_stepRight_click_handler
 ( ClickRecognizerRef recognizer, void *context )
 {
-  if (plotter_lag > 0 ) 
+  if (s_plotter_lag > 0 ) 
   {
-    --plotter_lag ;
-    layer_mark_dirty( plotter_layer ) ;              // this will call the plotter_layer_update_proc( ) method.
+    --s_plotter_lag ;
+    layer_mark_dirty( s_plotter_layer ) ;              // this will call the plotter_layer_update_proc( ) method.
   }
 }
 
@@ -143,8 +170,8 @@ void
 plotter_fullLeft_click_handler
 ( ClickRecognizerRef recognizer, void *context )
 {
-  plotter_lag = sampler_beingPlotted->samplesNum > SAMPLES_SHOW_MAX ? sampler_beingPlotted->samplesNum - SAMPLES_SHOW_MAX : sampler_beingPlotted->samplesNum - SAMPLES_SHOW_MIN ;
-  layer_mark_dirty( plotter_layer ) ;               // this will call the plotter_layer_update_proc( ) method.
+  s_plotter_lag = sampler_beingPlotted->samplesNum > SAMPLES_SHOW_MAX ? sampler_beingPlotted->samplesNum - SAMPLES_SHOW_MAX : sampler_beingPlotted->samplesNum - SAMPLES_SHOW_MIN ;
+  layer_mark_dirty( s_plotter_layer ) ;               // this will call the plotter_layer_update_proc( ) method.
 }
 
 
@@ -152,8 +179,8 @@ void
 plotter_fullRight_click_handler
 ( ClickRecognizerRef recognizer, void *context )
 {
-  plotter_lag = 0 ;                                 // Resume auto-scrolling plotting.
-  layer_mark_dirty( plotter_layer ) ;               // this will call the plotter_layer_update_proc( ) method.
+  s_plotter_lag = 0 ;                                 // Resume auto-scrolling plotting.
+  layer_mark_dirty( s_plotter_layer ) ;               // this will call the plotter_layer_update_proc( ) method.
 }
 
 
@@ -225,8 +252,8 @@ void
 configMode_enter_click_handler
 ( ClickRecognizerRef recognizer, void *context )
 {
-  config_mode_isOn = true ;
-  action_bar_layer_set_click_config_provider( action_bar, configMode_click_config_provider ) ;
+  s_config_mode_isOn = true ;
+  action_bar_layer_set_click_config_provider( s_action_bar_layer, configMode_click_config_provider ) ;
 }
 
 
@@ -234,8 +261,8 @@ void
 configMode_exit_click_handler
 ( ClickRecognizerRef recognizer, void *context )
 {
-  config_mode_isOn = false ;
-  action_bar_layer_set_click_config_provider( action_bar, normalMode_click_config_provider ) ;
+  s_config_mode_isOn = false ;
+  action_bar_layer_set_click_config_provider( s_action_bar_layer, normalMode_click_config_provider ) ;
 }
 
 
@@ -306,7 +333,7 @@ accel_data_service_handler
 , uint32_t   num_samples
 )
 {
-  if (plotter_lag != 0)
+  if (s_plotter_lag != 0)
     return ;                   // Freeze feeding the FIFO XYZ samplers until the user returns to the rightmost part.
 
   for (uint8_t iSample = 0  ;  iSample < num_samples  ;  ++iSample )
@@ -317,12 +344,12 @@ accel_data_service_handler
     ++ad ;
   }
 
-  layer_mark_dirty( plotter_layer ) ;              // this will call the plotter_layer_update_proc( ) method.
+  layer_mark_dirty( s_plotter_layer ) ;              // this will call the plotter_layer_update_proc( ) method.
 }
 
 
 void
-world_init
+world_initialize
 ( )
 {
   sampler_accelX = Sampler_new( SAMPLES_CAPACITY ) ;
@@ -337,13 +364,40 @@ plotter_layer_update_proc
 , GContext *gCtx
 )
 {
-  Sampler_plot( sampler_beingPlotted, me, gCtx, plotter_lag, SAMPLES_SHOW_MAX, SAMPLES_SHOW_MIN, &label_max, &label_min ) ;
+  LOGD("plotter_layer_update_proc:: ENTER") ;
+
+#ifdef  PBL_COLOR
+  switch (s_plotter_mode)
+  {
+    case PLOTTER_MODE_X:
+    	graphics_context_set_stroke_color( gCtx, GColorRed ) ;
+      break ;
+
+    case PLOTTER_MODE_Y:
+    	graphics_context_set_stroke_color( gCtx, GColorYellow ) ;
+      break ;
+
+    case PLOTTER_MODE_Z:
+    	graphics_context_set_stroke_color( gCtx, GColorGreen ) ;
+      break ;
+
+    default:
+      graphics_context_set_stroke_color( gCtx, GColorWhite ) ;
+      break ;
+  }
+#else
+	graphics_context_set_stroke_color( gCtx, GColorWhite ) ;
+#endif
+
+  Sampler_plot( gCtx, sampler_beingPlotted, unobstructed_plotter.w, unobstructed_plotter.h, s_plotter_lag, SAMPLES_SHOW_MAX, SAMPLES_SHOW_MIN, &label_max, &label_min ) ;
   label_update( ) ;
+
+  LOGD("plotter_layer_update_proc:: LEAVE") ;
 }
 
 
 void
-world_deinit
+world_finalize
 ( )
 {
   sampler_beingPlotted = NULL ;
@@ -357,7 +411,7 @@ void
 world_start
 ( )
 {
-  plotterMode_set( DEFAULT_PLOTTER_MODE ) ;
+  plotterMode_set( PLOTTER_DEFAULT_MODE ) ;
   accel_data_service_subscribe( sampler_samplesPerUpdate, accel_data_service_handler ) ;
 }
 
@@ -378,16 +432,26 @@ app_exit_click_handler
 
 
 void
+unobstructed_area_change_handler
+( AnimationProgress progress
+, void             *context
+)
+{
+  unobstructed_plotter = layer_get_unobstructed_bounds( s_plotter_layer ).size ;
+}
+
+
+void
 window_load
 ( Window *window )
 {
-  Layer *window_root_layer = window_get_root_layer( window ) ;
+  s_window_layer = window_get_root_layer( window ) ;
 
-  action_bar = action_bar_layer_create( ) ;
-  action_bar_layer_add_to_window( action_bar, window ) ;
-  action_bar_layer_set_click_config_provider( action_bar, normalMode_click_config_provider ) ;
+  s_action_bar_layer = action_bar_layer_create( ) ;
+  action_bar_layer_add_to_window( s_action_bar_layer, window ) ;
+  action_bar_layer_set_click_config_provider( s_action_bar_layer, normalMode_click_config_provider ) ;
 
-  GRect root_bounds = layer_get_frame( window_root_layer ) ;
+  GRect root_bounds = layer_get_frame( s_window_layer ) ;
 
   // Label layer.
   GRect label_bounds ;
@@ -396,21 +460,27 @@ window_load
   label_bounds.size.h   = 24 ;
   label_bounds.size.w   = root_bounds.size.w ;
 
-  label_layer = text_layer_create( label_bounds ) ;
-  text_layer_set_background_color( label_layer, GColorBlack ) ;
-  text_layer_set_text_color( label_layer, GColorWhite ) ;
-  layer_add_child( window_root_layer, text_layer_get_layer( label_layer ) ) ;
+  s_label_text_layer = text_layer_create( label_bounds ) ;
+  text_layer_set_background_color( s_label_text_layer, GColorBlack ) ;
+  text_layer_set_text_color( s_label_text_layer, GColorWhite ) ;
+  layer_add_child( s_window_layer, s_label_layer = text_layer_get_layer( s_label_text_layer ) ) ;
 
   // Plotter layer
   GRect plotter_bounds ;
   plotter_bounds.origin.x = label_bounds.origin.x ;
   plotter_bounds.origin.y = label_bounds.origin.y + label_bounds.size.h ;
   plotter_bounds.size.h   = root_bounds.size.h - label_bounds.size.h ;
-  plotter_bounds.size.w   = label_bounds.size.w ;
+  plotter_bounds.size.w   = root_bounds.size.w ;
 
-  plotter_layer = layer_create( plotter_bounds ) ;
-  layer_set_update_proc( plotter_layer, plotter_layer_update_proc ) ;
-  layer_add_child( window_root_layer, plotter_layer ) ;
+  s_plotter_layer = layer_create( plotter_bounds ) ;
+  layer_set_update_proc( s_plotter_layer, plotter_layer_update_proc ) ;
+  layer_add_child( s_window_layer, s_plotter_layer ) ;
+
+  unobstructed_plotter = layer_get_unobstructed_bounds( s_plotter_layer ).size ;
+
+  // Obstrution handling.
+  UnobstructedAreaHandlers unobstructed_area_handlers = { .change = unobstructed_area_change_handler } ;
+  unobstructed_area_service_subscribe( unobstructed_area_handlers, NULL ) ;
 
   world_start( ) ;
 }
@@ -420,43 +490,40 @@ void
 window_unload
 ( Window *window )
 {
+  unobstructed_area_service_unsubscribe( ) ;
   world_stop( ) ;
-  text_layer_destroy( label_layer ) ;
-  layer_destroy( plotter_layer ) ;
+  text_layer_destroy( s_label_text_layer ) ;
+  layer_destroy( s_plotter_layer ) ;
 }
 
 
 void
-app_init
+app_initialize
 ( void )
 {
-  world_init( ) ;
+  world_initialize( ) ;
 
-  window = window_create( ) ;
-  window_set_background_color( window, GColorBlack ) ;
+  s_window = window_create( ) ;
+  window_set_background_color( s_window, GColorBlack ) ;
  
-  window_set_window_handlers( window
+  window_set_window_handlers( s_window
                             , (WindowHandlers)
                               { .load   = window_load
                               , .unload = window_unload
                               }
                             ) ;
 
-#ifdef PBL_SDK_2
-  window_set_fullscreen( window, true ) ;
-#endif
- 
-  window_stack_push( window, false ) ;
+  window_stack_push( s_window, false ) ;
 }
 
 
 void
-app_deinit
+app_finalize
 ( void )
 {
-  window_stack_remove( window, false ) ;
-  window_destroy( window ) ;
-  world_deinit( ) ;
+  window_stack_remove( s_window, false ) ;
+  window_destroy( s_window ) ;
+  world_finalize( ) ;
 }
 
 
@@ -464,7 +531,7 @@ int
 main
 ( void )
 {
-  app_init( ) ;
+  app_initialize( ) ;
   app_event_loop( ) ;
-  app_deinit( ) ;
+  app_finalize( ) ;
 }
