@@ -3,7 +3,7 @@
    File    : main.c
    Author  : Afonso Santos, Portugal
 
-   Last revision: October 20 2016
+   Last revision: October 24 2016
 */
 
 #include <pebble.h>
