@@ -1,9 +1,9 @@
 /*
-   Project: Accelerometer (watchapp)
-   File   : main.c
-   Author : Afonso Santos, Portugal
+   WatchApp: Accelerometer
+   File    : main.c
+   Author  : Afonso Santos, Portugal
 
-   Last revision: 12h31 August 28 2016
+   Last revision: October 20 2016
 */
 
 #include <pebble.h>
@@ -27,8 +27,25 @@ static ActionBarLayer *s_action_bar_layer ;
 
 
 // World related
-#define SAMPLES_CAPACITY          2500
-#define SAMPLES_SHOW_MAX          145
+#if defined(PBL_PLATFORM_APLITE)
+  #define SAMPLES_CAPACITY       2500
+#endif
+
+#if defined(PBL_PLATFORM_BASALT) || defined(PBL_PLATFORM_CHALK) || defined(PBL_PLATFORM_DIORITE)
+  #define SAMPLES_CAPACITY       7500
+#endif
+
+#if defined(PBL_PLATFORM_EMERY)
+  #define SAMPLES_CAPACITY       15000
+#endif
+
+
+#if defined(PBL_PLATFORM_EMERY)
+  #define SAMPLES_SHOW_MAX        201
+#else
+  #define SAMPLES_SHOW_MAX        145
+#endif
+
 #define SAMPLES_SHOW_MIN          10
 
 typedef enum { PLOTTER_MODE_UNDEFINED
@@ -401,9 +418,9 @@ world_finalize
 ( )
 {
   sampler_beingPlotted = NULL ;
-  free( Sampler_free( sampler_accelX ) ) ; sampler_accelX = NULL ;
-  free( Sampler_free( sampler_accelY ) ) ; sampler_accelY = NULL ;
-  free( Sampler_free( sampler_accelZ ) ) ; sampler_accelZ = NULL ;
+  Sampler_free( sampler_accelX ) ;
+  Sampler_free( sampler_accelY ) ;
+  Sampler_free( sampler_accelZ ) ;
 }
 
 

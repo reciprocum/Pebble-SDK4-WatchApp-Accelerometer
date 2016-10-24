@@ -1,9 +1,9 @@
 /*
-   Project: Accelerometer (watchapp)
-   File   : Config.h
-   Author : Afonso Santos, Portugal
+   WatchApp: Accelerometer
+   File    : Config.h
+   Author  : Afonso Santos, Portugal
 
-   Last revision: 13h30 August 28 2016
+   Last revision: 13h30 August 30 2016
 */
 
 #pragma once

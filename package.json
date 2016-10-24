@@ -1,6 +1,8 @@
 {
     "author": "Karambola",
-    "dependencies": {},
+    "dependencies": {
+        "karambola": "https://builds.cloudpebble.net/fac89119-703a-442e-824e-cbe11610011c/package.tar.gz"
+    },
     "keywords": [],
     "name": "accelerometer",
     "pebble": {
@@ -13,13 +15,15 @@
         },
         "sdkVersion": "3",
         "targetPlatforms": [
+            "aplite",
             "basalt",
-            "diorite"
+            "diorite",
+            "emery"
         ],
         "uuid": "16f2de14-1b53-4431-a5bd-e6b52e3ca631",
         "watchapp": {
             "watchface": false
         }
     },
-    "version": "4.0.0"
+    "version": "4.2.0"
 }
